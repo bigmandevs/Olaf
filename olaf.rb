@@ -22,9 +22,20 @@ require 'tempfile'
 require 'open3'
 require 'find'
 
-DB_FOLDER = File.expand_path("~/.olaf/db") #needs to be the same in the c code
-CACHE_FOLDER = File.expand_path("~/.olaf/cache") #needs to be the same in the c code
+_db_index = ARGV.index('--db')
+if _db_index
+  _db_root = File.expand_path(ARGV[_db_index + 1])
+  ARGV.delete_at(_db_index + 1)
+  ARGV.delete_at(_db_index)
+else
+  _db_root = File.expand_path("~/.olaf")
+end
+
+DB_ROOT      = _db_root
+DB_FOLDER    = File.join(DB_ROOT, "db")
+CACHE_FOLDER = File.join(DB_ROOT, "cache")
 EXECUTABLE_LOCATION = "/usr/local/bin/olaf_c"
+CHILD_ENV = (DB_ROOT == File.expand_path("~/.olaf")) ? {} : { 'OLAF_DB' => DB_FOLDER }
 CHECK_INCOMING_AUDIO = true
 SKIP_DUPLICATES = true
 FRAGMENT_DURATION_IN_SECONDS = 30
@@ -120,7 +131,7 @@ def has(audio_file)
   #return false if no db exits
   return false if (Dir.glob(File.join(DB_FOLDER,"*")).size == 0)
 
-  result = IO.popen([EXECUTABLE_LOCATION, 'has', audio_file], &:read)
+  result = IO.popen([CHILD_ENV, EXECUTABLE_LOCATION, 'has', audio_file], &:read)
   unless(result.empty?)
     result_line = result.split("\n")[1]
     result_line.split(";").size > 1
@@ -137,7 +148,7 @@ end
 def query_fragmented(index,length,audio_filename,ignore_self_match, skip_size,stream)
   audio_filename = File.expand_path(audio_filename)
 
-  query_audio_identifer = IO.popen([EXECUTABLE_LOCATION, 'name_to_id', audio_filename], &:read).strip.to_i
+  query_audio_identifer = IO.popen([CHILD_ENV, EXECUTABLE_LOCATION, 'name_to_id', audio_filename], &:read).strip.to_i
 
   tot_duration = audio_file_duration(audio_filename)
   start = 0
@@ -147,7 +158,7 @@ def query_fragmented(index,length,audio_filename,ignore_self_match, skip_size,st
 
     with_converted_audio_part(audio_filename,start,skip_size) do |tempfile|
 
-      stdout, stderr, status = Open3.capture3(EXECUTABLE_LOCATION, 'query', tempfile.path, audio_filename)
+      stdout, stderr, status = Open3.capture3(CHILD_ENV, EXECUTABLE_LOCATION, 'query', tempfile.path, audio_filename)
 
       stdout.split("\n").each do |line|
         data = line.split(",")
@@ -166,10 +177,10 @@ def query_fragmented(index,length,audio_filename,ignore_self_match, skip_size,st
 end
 
 def query(index,length,audio_filename,ignore_self_match)
-  query_audio_identifer =  IO.popen([EXECUTABLE_LOCATION, 'name_to_id', audio_filename], &:read).strip.to_i
+  query_audio_identifer =  IO.popen([CHILD_ENV, EXECUTABLE_LOCATION, 'name_to_id', audio_filename], &:read).strip.to_i
 
   with_converted_audio(audio_filename) do |tempfile|
-    stdout, stderr, status = Open3.capture3(EXECUTABLE_LOCATION, 'query', tempfile.path, audio_filename)
+    stdout, stderr, status = Open3.capture3(CHILD_ENV, EXECUTABLE_LOCATION, 'query', tempfile.path, audio_filename)
 
     stdout.split("\n").each do |line|
       data = line.split(",")
@@ -259,7 +270,7 @@ end
 
 def print(index,length,audio_filename)
   with_converted_audio(audio_filename) do |tempfile|
-    stdout, stderr, status = Open3.capture3(EXECUTABLE_LOCATION, 'print', tempfile.path, audio_filename)
+    stdout, stderr, status = Open3.capture3(CHILD_ENV, EXECUTABLE_LOCATION, 'print', tempfile.path, audio_filename)
     stdout.split("\n").each do |line|
       puts "#{index}/#{length},#{File.expand_path audio_filename},#{line}\n"
     end
@@ -290,14 +301,14 @@ def store_cached
     if (SKIP_DUPLICATES && has(audio_filename))
       puts "#{index}/#{length} #{File.basename audio_filename} SKIPPED: already indexed audio file"
     else
-      stdout, stderr, status = Open3.capture3(EXECUTABLE_LOCATION, 'store_cached', cache_file)
+      stdout, stderr, status = Open3.capture3(CHILD_ENV, EXECUTABLE_LOCATION, 'store_cached', cache_file)
       puts "#{index}/#{length} #{File.basename audio_filename} #{stdout.strip}"
     end
   end
 end
 
 def cache(index,length,audio_filename)
-  audio_identifier = IO.popen([EXECUTABLE_LOCATION, 'name_to_id', audio_filename], &:read).strip
+  audio_identifier = IO.popen([CHILD_ENV, EXECUTABLE_LOCATION, 'name_to_id', audio_filename], &:read).strip
   cache_file_name = File.join(CACHE_FOLDER,"#{audio_identifier}.tdb")
 
   if File.exist? cache_file_name
@@ -312,7 +323,7 @@ def cache(index,length,audio_filename)
   
 
   with_converted_audio(audio_filename) do |tempfile|
-    Open3.popen3(EXECUTABLE_LOCATION, 'print', tempfile.path, audio_filename) do |stdin, stdout, stderr, status , thread |
+    Open3.popen3(CHILD_ENV, EXECUTABLE_LOCATION, 'print', tempfile.path, audio_filename) do |stdin, stdout, stderr, status , thread |
       File.open(cache_file_name,"w") do |cache_file|
         fp_counter = 0
         while line = stdout.gets do 
@@ -334,7 +345,7 @@ def store(index,length,audio_filename)
     puts "#{index}/#{length} #{File.basename audio_filename} SKIP: already stored audio "
   else
     with_converted_audio(audio_filename) do |tempfile|
-      stdout, stderr, status = Open3.capture3(EXECUTABLE_LOCATION, 'store', tempfile.path, audio_filename)
+      stdout, stderr, status = Open3.capture3(CHILD_ENV, EXECUTABLE_LOCATION, 'store', tempfile.path, audio_filename)
       puts "#{index}/#{length} #{File.basename audio_filename} #{stderr.strip}"
     end
   end
@@ -343,7 +354,7 @@ end
 def microphone
   argument = ""
   puts "#{MIC_INPUT.shelljoin} | #{EXECUTABLE_LOCATION} query"
-  Open3.pipeline(MIC_INPUT, [EXECUTABLE_LOCATION, 'query'])
+  Open3.pipeline(MIC_INPUT, [CHILD_ENV, EXECUTABLE_LOCATION, 'query'])
 end
 
 def clear(arguments)
@@ -383,7 +394,7 @@ end
 def delete(index,length,audio_filename)
   #Do not store same audio twice
   with_converted_audio(audio_filename) do |tempfile|
-    stdout, stderr, status = Open3.capture3(EXECUTABLE_LOCATION, 'delete', tempfile.path, audio_filename)
+    stdout, stderr, status = Open3.capture3(CHILD_ENV, EXECUTABLE_LOCATION, 'delete', tempfile.path, audio_filename)
     puts "#{index}/#{length} #{File.basename audio_filename} #{stderr.strip}"
   end
 end
@@ -391,8 +402,8 @@ end
 
 
 #create the db folders unless it exist
-FileUtils.mkdir_p DB_FOLDER unless File.exist?(DB_FOLDER)
-FileUtils.mkdir_p CACHE_FOLDER unless File.exist?(CACHE_FOLDER)
+FileUtils.mkdir_p DB_FOLDER
+FileUtils.mkdir_p CACHE_FOLDER
 
 command  = ARGV[0]
 
@@ -461,7 +472,7 @@ commands = {
     ",
     :help => "",
     :needs_audio_files => false,
-    :lambda => -> { system(EXECUTABLE_LOCATION, 'stats') }
+    :lambda => -> { system(CHILD_ENV, EXECUTABLE_LOCATION, 'stats') }
   },
   "store" => {
     :description => "Extracts and stores fingerprints into an index.
@@ -613,8 +624,10 @@ commands = {
 def print_help(commands)
   date_stamp = File.stat(EXECUTABLE_LOCATION).mtime.strftime("%Y.%m.%d")
 
-  puts "Olaf #{date_stamp} - Overly Lightweight Audio Fingerprinting" 
-  "No such command, the following commands are valid:"
+  puts "Olaf #{date_stamp} - Overly Lightweight Audio Fingerprinting"
+  puts "\nGlobal options:"
+  puts "  --db <path>   Use a custom database root directory (default: ~/.olaf)"
+  puts "\nCommands:"
   commands.keys.sort.each do |key|
     value = commands[key]
     puts

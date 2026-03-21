@@ -23,19 +23,27 @@ Olaf_Config* olaf_config_default(void){
 	Olaf_Config *config = (Olaf_Config *) malloc(sizeof(Olaf_Config));
 
 	//construct the directory to write db info to: /home/user/.olaf/db/
-	const char * homeDir = getenv("HOME");
-	if (homeDir == NULL){
-		fprintf(stderr,"No home directory found, will use './db' as db folder");
-		config->dbFolder = "db";
-	}else{
-		//This assume a UNIX file separator
-		const char* dbDir = "/.olaf/db/";
-		size_t length = strlen(homeDir) +  strlen(dbDir) + 1;
-		char * fullDbFolderName = (char *) malloc(length);
-		strcpy(fullDbFolderName,homeDir);
-		strcat(fullDbFolderName,dbDir);
-		fullDbFolderName[length-1] = '\0';
-		config->dbFolder = fullDbFolderName;
+	const char * olafDb = getenv("OLAF_DB");
+	if (olafDb != NULL) {
+		size_t length = strlen(olafDb) + 1;
+		char * folderName = (char *) malloc(length);
+		strcpy(folderName, olafDb);
+		config->dbFolder = folderName;
+	} else {
+		const char * homeDir = getenv("HOME");
+		if (homeDir == NULL){
+			fprintf(stderr,"No home directory found, will use './db' as db folder");
+			config->dbFolder = "db";
+		}else{
+			//This assume a UNIX file separator
+			const char* dbDir = "/.olaf/db/";
+			size_t length = strlen(homeDir) +  strlen(dbDir) + 1;
+			char * fullDbFolderName = (char *) malloc(length);
+			strcpy(fullDbFolderName,homeDir);
+			strcat(fullDbFolderName,dbDir);
+			fullDbFolderName[length-1] = '\0';
+			config->dbFolder = fullDbFolderName;
+		}
 	}	
 
 	//audio info
@@ -46,7 +54,7 @@ Olaf_Config* olaf_config_default(void){
 	config->bytesPerAudioSample = 4; //32 bits float
 
 	config->maxEventPoints=60;
-	config->eventPointThreshold = 30;
+	config->eventPointThreshold = 10;
 	config->sqrtMagnitude = false;
 
 	//the filter used in both frequency as time direction 
@@ -55,12 +63,12 @@ Olaf_Config* olaf_config_default(void){
 	config->filterSizeFrequency=103;//frequency bins 
 	config->halfFilterSizeFrequency=config->filterSizeFrequency/2;
 
-	config->filterSizeTime=24;// 25 * 128/16 = 200 ms
+	config->filterSizeTime=12;// 12 * 128/16 = 96 ms
 	config->halfFilterSizeTime=config->filterSizeTime/2;
 
 	//prevent silence to register as event points
 	config->minEventPointMagnitude = 0.001;
-	config->maxEventPointUsages = 10;
+	config->maxEventPointUsages = 20;
 	//only start at freqency bin 9, 9 * 16000/1024 = 140Hz 
 	config->minFrequencyBin = 9; 
 	//debug statements
@@ -82,13 +90,13 @@ Olaf_Config* olaf_config_default(void){
 	config->maxFingerprints=300;
 
 	//maximum number of results
-	config->maxResults = 50;
+	config->maxResults = 300;
 
 	//The range around a hash to search
-	config->searchRange = 5;
+	config->searchRange = 10;
 
 	//minimum aligned matches before reporting match
-	config->minMatchCount = 6;
+	config->minMatchCount = 30;
 
 	//duration in seconds before a match is reported.
 	//Zero means that all matches are reported.
@@ -101,7 +109,7 @@ Olaf_Config* olaf_config_default(void){
 	config->printResultEvery = 0;//seconds
 	
 	//number of matches (hash collisions) 
-	config->maxDBCollisions = 2000;//for larger data sets use around 2000
+	config->maxDBCollisions = 50000;//for larger data sets use around 2000
 
 	return config;
 }
