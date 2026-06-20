@@ -32,6 +32,7 @@
 	#define OLAF_RUNNER_MODE_STORE  434
 	#define OLAF_RUNNER_MODE_DELETE 653
 	#define OLAF_RUNNER_MODE_PRINT  9043
+	#define OLAF_RUNNER_MODE_QUERY_MULTI 7117
 	
 	/**
 	 * @struct Olaf_Runner

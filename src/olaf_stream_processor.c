@@ -202,3 +202,83 @@ void olaf_stream_processor_process(Olaf_Stream_Processor * processor){
 	double fingerprintspersecond = olaf_fp_extractor_total(processor->fp_extractor) / audioDuration;
     fprintf(stderr,"%s %lu fp's from %.1fs (%.0f fp/s) in %.3fs (%.0f times realtime)\n",verb,olaf_fp_extractor_total(processor->fp_extractor), audioDuration,fingerprintspersecond,cpu_time_used,ratio);
 }
+
+void olaf_stream_processor_process_multi(Olaf_Stream_Processor * processor, Olaf_DB ** dbs, size_t db_count){
+
+	int audioBlockIndex = 0;
+
+	//One matcher per database, all fed from a single fingerprint extraction pass.
+	Olaf_FP_Matcher ** matchers = (Olaf_FP_Matcher **) malloc(db_count * sizeof(Olaf_FP_Matcher *));
+	for(size_t d = 0 ; d < db_count ; d++){
+		matchers[d] = olaf_fp_matcher_new(processor->config,dbs[d],olaf_fp_matcher_callback_print_result);
+	}
+
+	struct extracted_event_points * eventPoints = NULL;
+	struct extracted_fingerprints * fingerprints = NULL;
+
+	size_t samples_read = olaf_reader_read(processor->reader,processor->audio_data);
+	size_t samples_expected = processor->config->audioStepSize;
+
+	clock_t start, end;
+	double cpu_time_used;
+	start = clock();
+
+	//The fft struct is reused
+	PFFFT_Setup *fftSetup = processor->runner->fftSetup;
+	float *fft_in= processor->runner->fft_in;
+	float *fft_out= processor->runner->fft_out;
+
+	const float* window = olaf_fft_window(processor->config->audioBlockSize);
+	while(samples_read==samples_expected){
+		samples_read = olaf_reader_read(processor->reader,processor->audio_data);
+
+		// windowing + copy to fft input
+		for(int j = 0 ; j <  processor->config->audioBlockSize ; j++){
+			fft_in[j] = processor->audio_data[j] * window[j];
+		}
+
+		//do the transform
+		pffft_transform_ordered(fftSetup, fft_in, fft_out, 0, PFFFT_FORWARD);
+
+		//extract event points
+		eventPoints = olaf_ep_extractor_extract(processor->ep_extractor,fft_out,audioBlockIndex);
+
+		//if there are enough event points
+		if(eventPoints->eventPointIndex > processor->config->eventPointThreshold){
+			//combine the event points into fingerprints
+			fingerprints = olaf_fp_extractor_extract(processor->fp_extractor,eventPoints,audioBlockIndex);
+
+			//match the same batch against every database, then make room for the next batch
+			for(size_t d = 0 ; d < db_count ; d++){
+				olaf_fp_matcher_match_batch(matchers[d],fingerprints);
+			}
+			fingerprints->fingerprintIndex = 0;
+		}
+		audioBlockIndex++;
+	}
+
+	//handle the last event points
+	fingerprints = olaf_fp_extractor_extract(processor->fp_extractor,eventPoints,audioBlockIndex);
+	for(size_t d = 0 ; d < db_count ; d++){
+		olaf_fp_matcher_match_batch(matchers[d],fingerprints);
+	}
+	fingerprints->fingerprintIndex = 0;
+
+	double audioDuration = (double) olaf_reader_total_samples_read(processor->reader) / (double) processor->config->audioSampleRate;
+
+	//print the results of each matcher; the format is identical to a single-db
+	//query so downstream parsing is unchanged.
+	for(size_t d = 0 ; d < db_count ; d++){
+		olaf_fp_matcher_callback_print_header();
+		olaf_fp_matcher_print_results(matchers[d]);
+		olaf_fp_matcher_destroy(matchers[d]);
+	}
+	free(matchers);
+
+	//for timing statistics
+	end = clock();
+	cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+	double ratio = audioDuration / cpu_time_used;
+	double fingerprintspersecond = olaf_fp_extractor_total(processor->fp_extractor) / audioDuration;
+	fprintf(stderr,"Matched %lu fp's from %.1fs (%.0f fp/s) in %.3fs (%.0f times realtime)\n",olaf_fp_extractor_total(processor->fp_extractor), audioDuration,fingerprintspersecond,cpu_time_used,ratio);
+}

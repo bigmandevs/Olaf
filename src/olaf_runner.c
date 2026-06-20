@@ -34,8 +34,8 @@ Olaf_Runner * olaf_runner_new(int mode){
 		fprintf(stderr, "Open DB at folder '%s'\n", runner->config->dbFolder);
 	}
 
-	//no db needed in print mode!
-	if(mode == OLAF_RUNNER_MODE_PRINT){
+	//no db needed in print mode, the multi query opens its own databases
+	if(mode == OLAF_RUNNER_MODE_PRINT || mode == OLAF_RUNNER_MODE_QUERY_MULTI){
 		runner->db = NULL;
 	} else {
 		bool readonly_db = (mode == OLAF_RUNNER_MODE_QUERY);

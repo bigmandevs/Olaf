@@ -70,7 +70,20 @@
 	 * @param      olaf_fps         The fingerprints
 	 */
  	void olaf_fp_matcher_match(Olaf_FP_Matcher * olaf_fp_matcher, struct extracted_fingerprints * olaf_fps);
-	
+
+	/**
+	 * @brief      Match fingerprints with the database without consuming the batch.
+	 *
+	 * Unlike olaf_fp_matcher_match this does not reset the fingerprint buffer and
+	 * does not perform streaming print / old-match pruning. It lets a single
+	 * extracted batch be matched against multiple databases (one matcher each).
+	 * The caller is responsible for resetting fingerprintIndex afterwards.
+	 *
+	 * @param      olaf_fp_matcher  The olaf fp matcher
+	 * @param      olaf_fps         The fingerprints
+	 */
+	void olaf_fp_matcher_match_batch(Olaf_FP_Matcher * olaf_fp_matcher, struct extracted_fingerprints * olaf_fps);
+
 	/**
 	 * @brief      Print a header for the CSV output.
 	 */
