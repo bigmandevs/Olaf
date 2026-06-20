@@ -55,6 +55,21 @@
     void olaf_stream_processor_process(Olaf_Stream_Processor * olaf_stream_processor);
 
     /**
+     * @brief      Process a file once, matching the extracted fingerprints against several databases.
+     *
+     * The audio is decoded, transformed and turned into fingerprints a single
+     * time; the resulting fingerprints are matched against each of the given
+     * databases by a dedicated matcher. This avoids repeating the (database
+     * independent) fingerprint extraction once per database. Results for every
+     * database are printed in the same format as a single-database query.
+     *
+     * @param      olaf_stream_processor  The olaf stream processor (created in OLAF_RUNNER_MODE_QUERY_MULTI).
+     * @param      dbs                    An array of open, read-only databases.
+     * @param[in]  db_count               The number of databases in the array.
+     */
+    void olaf_stream_processor_process_multi(Olaf_Stream_Processor * olaf_stream_processor, Olaf_DB ** dbs, size_t db_count);
+
+    /**
      * @brief      Free up memory and release resources.
      *
      * @param      olaf_stream_processor  The olaf stream processor.

@@ -146,6 +146,37 @@ int olaf_store_cached(int argc, const char* argv[]){
 	return 0;
 }
 
+int olaf_query_multi(int argc, const char* argv[]){
+	// olaf_c query_multi audio.raw original_name db_folder_1 [db_folder_2 ...]
+	if(argc < 5){
+		olaf_print_help("query_multi needs raw audio, an original name and at least one db folder\n");
+	}
+
+	const char* raw_path = argv[2];
+	const char* orig_path = argv[3];
+	size_t db_count = (size_t)(argc - 4);
+
+	Olaf_Runner * runner = olaf_runner_new(OLAF_RUNNER_MODE_QUERY_MULTI);
+
+	Olaf_DB ** dbs = (Olaf_DB **) malloc(db_count * sizeof(Olaf_DB *));
+	for(size_t i = 0 ; i < db_count ; i++){
+		dbs[i] = olaf_db_new(argv[4 + i], true);
+	}
+
+	Olaf_Stream_Processor* processor = olaf_stream_processor_new(runner,raw_path,orig_path);
+	olaf_stream_processor_process_multi(processor,dbs,db_count);
+	olaf_stream_processor_destroy(processor);
+
+	for(size_t i = 0 ; i < db_count ; i++){
+		olaf_db_destroy(dbs[i]);
+	}
+	free(dbs);
+
+	olaf_runner_destroy(runner);
+	exit(0);
+	return 0;
+}
+
 int main(int argc, const char* argv[]){
 
 	if(argc < 2){
@@ -174,6 +205,8 @@ int main(int argc, const char* argv[]){
 		olaf_has(argc,argv);
 	} else if(strcmp(command,"store_cached") == 0){
 		olaf_store_cached(argc,argv);
+	} else if(strcmp(command,"query_multi") == 0){
+		olaf_query_multi(argc,argv);
 	} else {
 		fprintf(stderr,"%s Unknown command: \n",command);
 		olaf_print_help("Unknown command\n");

@@ -61,7 +61,9 @@ Olaf_DB * olaf_db_new(const char * mdb_folder,bool readonly){
 	e(mdb_env_set_maxreaders(olaf_db->env, 10));
 	e(mdb_env_set_mapsize(olaf_db->env,max_db_size_in_bytes));
 	e(mdb_env_set_maxdbs(olaf_db->env,2));
-	e(mdb_env_open(olaf_db->env, mdb_folder, readonly ? (MDB_RDONLY | MDB_NOLOCK) : 0, 0664));
+	//Fingerprint lookups are random by hash; disable OS readahead for read-only
+	//opens so large databases that do not fit in RAM do not thrash the page cache.
+	e(mdb_env_open(olaf_db->env, mdb_folder, readonly ? (MDB_RDONLY | MDB_NOLOCK | MDB_NORDAHEAD) : 0, 0664));
 	e(mdb_txn_begin(olaf_db->env, NULL, readonly ? MDB_RDONLY : 0 , &olaf_db->txn));
 
 	unsigned int fingerprint_flags = MDB_INTEGERKEY | MDB_DUPSORT | MDB_DUPFIXED | MDB_INTEGERDUP;

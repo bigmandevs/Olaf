@@ -228,8 +228,22 @@ void olaf_fp_matcher_match_single_fingerprint(Olaf_FP_Matcher * fp_matcher,uint3
 	}
 }
 
+// Match a batch of fingerprints without consuming them: the shared fingerprint
+// buffer is left untouched so the same batch can be matched against several
+// databases (one matcher each). The caller resets fingerprintIndex once all
+// matchers have seen the batch. No streaming print / old-match pruning here:
+// for batch queries printResultEvery and keepMatchesFor are zero, so this is
+// equivalent to olaf_fp_matcher_match minus the reset.
+void olaf_fp_matcher_match_batch(Olaf_FP_Matcher * fp_matcher, struct extracted_fingerprints * fingerprints ){
+	for(size_t i = 0 ; i < fingerprints->fingerprintIndex ; i++ ){
+		struct fingerprint f = fingerprints->fingerprints[i];
+		uint64_t hash = olaf_fp_extractor_hash(f);
+		olaf_fp_matcher_match_single_fingerprint(fp_matcher,f.timeIndex1,hash);
+	}
+}
+
 void olaf_fp_matcher_match(Olaf_FP_Matcher * fp_matcher, struct extracted_fingerprints *  fingerprints ){
-	
+
 	for(size_t i = 0 ; i < fingerprints->fingerprintIndex ; i++ ){
 		struct fingerprint f = fingerprints->fingerprints[i];
 		uint64_t hash = olaf_fp_extractor_hash(f);
